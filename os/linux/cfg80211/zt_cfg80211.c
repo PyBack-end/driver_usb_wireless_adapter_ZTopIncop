@@ -4067,7 +4067,16 @@ static zt_s32 cfg80211_remain_on_channel_cb(struct wiphy *wiphy,
     {
         /*register callback function*/
         zt_cfg80211_p2p_cb_reg(pnic_info);
-        zt_p2p_enable(pnic_info, P2P_ROLE_DEVICE);
+        if (zt_p2p_enable(pnic_info, P2P_ROLE_DEVICE) != ZT_RETURN_OK)
+        {
+            return -EIO;
+        }
+    }
+
+    p2p_info = pnic_info->p2p;
+    if (!p2p_info)
+    {
+        return -ENODEV;
     }
 
     {
