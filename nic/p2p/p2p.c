@@ -518,7 +518,18 @@ zt_s32 zt_p2p_init(nic_info_st *pnic_info)
         p2p_info->p2p_ie[i] = zt_kzalloc(P2P_IE_BUF_LEN);
         if (NULL == p2p_info->p2p_ie[i])
         {
+            zt_u8 j;
+
             P2P_ERR("zt_kzalloc p2p_ie failed");
+            for (j = 0; j < i; j++)
+            {
+                zt_kfree(p2p_info->p2p_ie[j]);
+                p2p_info->p2p_ie[j] = NULL;
+            }
+            zt_os_api_timer_unreg(&p2p_info->nego_timer);
+            zt_os_api_timer_unreg(&p2p_info->remain_ch_timer);
+            pnic_info->p2p = NULL;
+            zt_kfree(p2p_info);
             return ZT_RETURN_FAIL;
         }
     }
