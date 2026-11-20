@@ -88,17 +88,17 @@ zt_s32 zt_endpoint_init(struct usb_interface *pusb_intf,
     struct usb_device *pusb_dev                     = NULL;
     zt_u8 i                                         = 0;
 
+    if (!pusb_intf || !pusb_mngt)
+    {
+        return -EINVAL;
+    }
+
     pusb_mngt->pusb_intf = pusb_intf;
     pusb_mngt->pusb_dev = interface_to_usbdev(pusb_intf);
 
     pusb_mngt->n_in_pipes = 0;
     pusb_mngt->n_out_pipes = 0;
     pusb_dev = pusb_mngt->pusb_dev;
-
-    if (!pusb_intf || !pusb_mngt)
-    {
-        return -EINVAL;
-    }
 
     if (!pusb_dev || !pusb_dev->actconfig || !pusb_intf->altsetting)
     {
@@ -945,7 +945,8 @@ static zt_s32 zt_usb_probe(struct usb_interface *pusb_intf,
     if (hif_dev_insert(hif_node) < 0)
     {
         USB_WARN("[usb] hif dev insert error !!");
-        ret = -ENODEV;
+        /* Keep the interface bound so disconnect can unwind partial HIF state. */
+        ret = 0;
         goto exit;
     }
 
