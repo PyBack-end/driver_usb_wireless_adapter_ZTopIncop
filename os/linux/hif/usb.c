@@ -940,11 +940,6 @@ static zt_s32 zt_usb_probe(struct usb_interface *pusb_intf,
     }
 
 exit :
-    if (pusb_mngt)
-    {
-        zt_kfree(pusb_mngt);
-    }
-
     if (ret < 0)
     {
         if (pctrl_buffer)
@@ -956,6 +951,11 @@ exit :
         {
             usb_put_dev(pusb_mngt->pusb_dev);
         }
+    }
+
+    if (pusb_mngt)
+    {
+        zt_kfree(pusb_mngt);
     }
 
     return ret;
