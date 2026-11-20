@@ -16,32 +16,48 @@
  */
 #include "zt_os_api.h"
 
-zt_s32 zt_os_api_workqueue_init(zt_workqueue_mgnt_st *arg, void *param)
+static zt_s32 zt_os_api_workqueue_init(zt_workqueue_mgnt_st *arg, void *param)
 {
     zt_workqueue_func_param_st *tparam = param;
-    if (NULL == arg || NULL == tparam->workqueue_name)
+
+    if (!arg || !tparam || !tparam->workqueue_name || !tparam->func)
     {
-        LOG_E("[%s] arg or workqueue_name is null", __func__);
-        return -1;
+        LOG_E("[%s] invalid workqueue arguments", __func__);
+        return -EINVAL;
     }
 
     INIT_WORK(&arg->work, tparam->func);
-    arg->workqueue  = create_singlethread_workqueue(tparam->workqueue_name);
+    arg->workqueue = create_singlethread_workqueue(tparam->workqueue_name);
+    if (!arg->workqueue)
+    {
+        LOG_E("[%s] create_singlethread_workqueue failed", __func__);
+        return -ENOMEM;
+    }
 
     return 0;
 }
 
-zt_s32 zt_os_api_workqueue_term(zt_workqueue_mgnt_st *arg)
+static zt_s32 zt_os_api_workqueue_term(zt_workqueue_mgnt_st *arg)
 {
+    if (!arg || !arg->workqueue)
+    {
+        return -EINVAL;
+    }
+
     flush_workqueue(arg->workqueue);
     destroy_workqueue(arg->workqueue);
+    arg->workqueue = NULL;
     return 0;
 }
 
-zt_s32 zt_os_api_workqueue_work(zt_workqueue_mgnt_st *arg)
+static zt_s32 zt_os_api_workqueue_work(zt_workqueue_mgnt_st *arg)
 {
-    queue_work(arg->workqueue, &arg->work);
-    return 0;
+    if (!arg || !arg->workqueue)
+    {
+        return -EINVAL;
+    }
+
+    return queue_work(arg->workqueue, &arg->work) ? 1 : 0;
 }
 
 static zt_workqueue_ops_st zt_gl_workqueue_ops =
@@ -53,8 +69,17 @@ static zt_workqueue_ops_st zt_gl_workqueue_ops =
 
 void zt_os_api_workqueue_register(zt_workqueue_mgnt_st *wq, void *param)
 {
+    if (!wq)
+    {
+        LOG_E("[%s] workqueue management pointer is null", __func__);
+        return;
+    }
+
     wq->ops = &zt_gl_workqueue_ops;
     wq->param = param;
-    wq->ops->workqueue_init(wq, wq->param);
+    if (wq->ops->workqueue_init(wq, wq->param) < 0)
+    {
+        wq->ops = NULL;
+        wq->param = NULL;
+    }
 }
-
