@@ -137,7 +137,13 @@ ccflags-y += -I$(src)/os -I$(src)/os/linux -I$(src)/os/linux/os_porting
 ccflags-y += -I$(src)/os/linux/hif -I$(src)/os/linux/netdev
 ccflags-y += -I$(src)/os/linux/cfg80211 -I$(src)/os/linux/iw -I$(src)/os/linux/pwr
 ccflags-y += -I$(src)/nic -I$(src)/nic/utility -I$(src)/nic/p2p
-ccflags-y += -DZT_DEBUG_LEVEL=$(CONFIG_DEBUG_LEVEL)
+
+# EXTRA_CFLAGS is assembled by the top-level and platform makefiles before
+# Kbuild is entered. Kbuild does not reliably consume those legacy flags, so
+# explicitly forward the configured preprocessor definitions here. This keeps
+# firmware-file, chipset, Wi-Fi-mode, HIF, framework, and platform selections
+# consistent between the external make and the kernel module compilation.
+ccflags-y += $(filter -D%,$(EXTRA_CFLAGS))
 
 ifeq ($(CONFIG_HIF_PORT), usb)
 $(MODULE_NAME)-y += os/linux/hif/usb.o
