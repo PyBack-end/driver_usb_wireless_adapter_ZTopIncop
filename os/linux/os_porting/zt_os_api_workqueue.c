@@ -57,7 +57,8 @@ static zt_s32 zt_os_api_workqueue_work(zt_workqueue_mgnt_st *arg)
         return -EINVAL;
     }
 
-    return queue_work(arg->workqueue, &arg->work) ? 1 : 0;
+    queue_work(arg->workqueue, &arg->work);
+    return 0;
 }
 
 static zt_workqueue_ops_st zt_gl_workqueue_ops =
@@ -79,7 +80,6 @@ void zt_os_api_workqueue_register(zt_workqueue_mgnt_st *wq, void *param)
     wq->param = param;
     if (wq->ops->workqueue_init(wq, wq->param) < 0)
     {
-        wq->ops = NULL;
-        wq->param = NULL;
+        LOG_E("[%s] workqueue initialization failed", __func__);
     }
 }
