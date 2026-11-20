@@ -10,7 +10,7 @@
  *
  * This program is free software; you can redistribute  it and/or modify it
  * under  the terms of  the GNU General  Public License as published by the
- * Free Software Foundation;  either version 2 of the  License, or (at your
+ * Free Software Foundation;  either version 2 of the License, or (at your
  * option) any later version.
  *
  */
@@ -60,7 +60,11 @@ zt_inline zt_s32 zt_os_api_timer_set(zt_os_api_timer_t *ptimer, zt_u32 intv_ms)
 
 zt_inline zt_s32 zt_os_api_timer_unreg(zt_os_api_timer_t *ptimer)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+    timer_delete(ptimer);
+#else
     del_timer(ptimer);
+#endif
     return 0;
 }
 
@@ -73,4 +77,3 @@ zt_s32 zt_os_api_timer_term(void)
 {
     return 0;
 }
-

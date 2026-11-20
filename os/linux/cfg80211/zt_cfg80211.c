@@ -4025,10 +4025,10 @@ static zt_s32 cfg80211_remain_on_channel_cb(struct wiphy *wiphy,
         zt_u32 duration, zt_u64 *cookie)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0))
-    struct net_device *ndev = wdev->netdev;
+    struct net_device *ndev = wdev ? wdev->netdev : NULL;
 #endif
 
-    zt_u8 remain_ch = (zt_u8) ieee80211_frequency_to_channel(channel->center_freq);
+    zt_u8 remain_ch;
 
     struct cfg80211_wifidirect_info *pcfg80211_wdinfo;
     ndev_priv_st *pndev_priv;
@@ -4042,12 +4042,17 @@ static zt_s32 cfg80211_remain_on_channel_cb(struct wiphy *wiphy,
 #define WL_ROCH_BACK_OP
 #endif
 
-    if (ndev == NULL)
+    if (!ndev || !channel || !cookie)
     {
         return -EINVAL;
     }
 
+    remain_ch = (zt_u8) ieee80211_frequency_to_channel(channel->center_freq);
     pndev_priv = netdev_priv(ndev);
+    if (!pndev_priv || !pndev_priv->nic)
+    {
+        return -ENODEV;
+    }
     pnic_info = pndev_priv->nic;
     p2p_info = pnic_info->p2p;
     pcfg80211_wdinfo = &pndev_priv->cfg80211_wifidirect;
@@ -4062,7 +4067,16 @@ static zt_s32 cfg80211_remain_on_channel_cb(struct wiphy *wiphy,
     {
         /*register callback function*/
         zt_cfg80211_p2p_cb_reg(pnic_info);
-        zt_p2p_enable(pnic_info, P2P_ROLE_DEVICE);
+        if (zt_p2p_enable(pnic_info, P2P_ROLE_DEVICE) != ZT_RETURN_OK)
+        {
+            return -EIO;
+        }
+    }
+
+    p2p_info = pnic_info->p2p;
+    if (!p2p_info)
+    {
+        return -ENODEV;
     }
 
     {
@@ -4131,21 +4145,27 @@ static zt_s32 cfg80211_cancel_remain_on_channel_cb(struct wiphy *wiphy,
         zt_u64 cookie)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0))
-    struct net_device *ndev = wdev->netdev;
+    struct net_device *ndev = wdev ? wdev->netdev : NULL;
 #endif
 
     p2p_info_st *p2p_info   = NULL;
     ndev_priv_st *pndev_priv = NULL;
     nic_info_st *pnic_info   = NULL;
+
+    if (!ndev)
+    {
+        return -EINVAL;
+    }
+
     pndev_priv = netdev_priv(ndev);
+    if (!pndev_priv || !pndev_priv->nic)
+    {
+        return -ENODEV;
+    }
 
     pnic_info = pndev_priv->nic;
     p2p_info = pnic_info->p2p;
     CFG80211_DBG("mac addr: "ZT_MAC_FMT, ZT_MAC_ARG(nic_to_local_addr(pnic_info)));
-    if (ndev == NULL)
-    {
-        return -EINVAL;
-    }
 
     if (pnic_info->is_driver_critical)
     {

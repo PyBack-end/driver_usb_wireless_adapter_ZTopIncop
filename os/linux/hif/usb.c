@@ -75,7 +75,7 @@ static inline zt_s32 endpoint_num(const struct usb_endpoint_descriptor *epd)
     return usb_endpoint_num(epd);
 }
 
-zt_s32 zt_endpoint_init(struct usb_interface *pusb_intf,
+static zt_s32 zt_endpoint_init(struct usb_interface *pusb_intf,
                         hif_usb_mngt *pusb_mngt)
 {
     zt_s32 status                                      = 0;
@@ -88,12 +88,23 @@ zt_s32 zt_endpoint_init(struct usb_interface *pusb_intf,
     struct usb_device *pusb_dev                     = NULL;
     zt_u8 i                                         = 0;
 
+    if (!pusb_intf || !pusb_mngt)
+    {
+        return -EINVAL;
+    }
+
     pusb_mngt->pusb_intf = pusb_intf;
     pusb_mngt->pusb_dev = interface_to_usbdev(pusb_intf);
 
     pusb_mngt->n_in_pipes = 0;
     pusb_mngt->n_out_pipes = 0;
     pusb_dev = pusb_mngt->pusb_dev;
+
+    if (!pusb_dev || !pusb_dev->actconfig || !pusb_intf->altsetting)
+    {
+        USB_ERROR("USB interface has no active configuration or alternate setting");
+        return -ENODEV;
+    }
 
     phost_cfg = pusb_dev->actconfig;
     pcfg_desc = &phost_cfg->desc;
@@ -160,10 +171,22 @@ zt_s32 zt_endpoint_init(struct usb_interface *pusb_intf,
     return status;
 }
 
-zt_s32 zt_endpoint_deinit(struct usb_interface *pusb_intf)
+static zt_s32 zt_endpoint_deinit(struct usb_interface *pusb_intf)
 {
-    hif_node_st  *hif_node = usb_get_intfdata(pusb_intf);
-    hif_usb_mngt *pusb_mngt = &hif_node->u.usb;
+    hif_node_st  *hif_node;
+    hif_usb_mngt *pusb_mngt;
+
+    if (!pusb_intf)
+    {
+        return -EINVAL;
+    }
+
+    hif_node = usb_get_intfdata(pusb_intf);
+    if (!hif_node)
+    {
+        return -ENODEV;
+    }
+    pusb_mngt = &hif_node->u.usb;
 
     usb_set_intfdata(pusb_intf, NULL);
     if (pusb_mngt)
@@ -185,12 +208,12 @@ zt_s32 zt_endpoint_deinit(struct usb_interface *pusb_intf)
 }
 
 
-zt_s32 zt_usb_init(struct hif_node_  *hif_node)
+static zt_s32 zt_usb_init(struct hif_node_  *hif_node)
 {
     return 0;
 }
 
-zt_s32 zt_usb_deinit(struct hif_node_  *hif_node)
+static zt_s32 zt_usb_deinit(struct hif_node_  *hif_node)
 {
     USB_DBG("usb_deinit");
     return 0;
@@ -427,48 +450,35 @@ static inline void usb_read_port_complete(struct urb *purb)
         switch (purb->status)
         {
             case -EINVAL:
-            {
                 USB_WARN("[%s] EINVAL", __func__);
-            }
+                break;
             case -EPIPE:
-            {
-                USB_WARN("[%s] EPIPE", __func__);
-            }
+                USB_WARN("[%s] EPIPE (endpoint stalled)", __func__);
+                break;
             case -ENODEV:
-            {
-                USB_WARN("[%s] ENODEV", __func__);
-            }
             case -ESHUTDOWN:
-            {
-                USB_WARN("[%s] ESHUTDOWN", __func__);
-            }
-            case -ENOENT:
-            {
-                USB_WARN("[%s] ENOENT", __func__);
+                USB_WARN("[%s] device disconnected or shutting down", __func__);
                 hnode->dev_removed = zt_true;
                 break;
-            }
+            case -ENOENT:
+                /* A cancelled URB is not, by itself, proof of device removal. */
+                USB_WARN("[%s] ENOENT (URB cancelled)", __func__);
+                break;
             case -EPROTO:
-            {
                 USB_WARN("[%s] EPROTO", __func__);
-            }
+                break;
             case -EILSEQ:
-            {
                 USB_WARN("[%s] EILSEQ", __func__);
-            }
+                break;
             case -ETIME:
-            {
                 USB_WARN("[%s] ETIME", __func__);
-            }
+                break;
             case -ECOMM:
-            {
                 USB_WARN("[%s] ECOMM", __func__);
-            }
+                break;
             case -EOVERFLOW:
-            {
                 USB_WARN("[%s] EOVERFLOW", __func__);
                 break;
-            }
             case -EINPROGRESS:
             {
                 USB_WARN("ERROR: URB IS IN PROGRESS!");
@@ -869,6 +879,7 @@ static zt_s32 zt_usb_probe(struct usb_interface *pusb_intf,
     hif_node_st  *hif_node  = NULL;
     zt_u8 *pctrl_buffer     = NULL;
     hif_usb_mngt *pusb_mngt = NULL;
+    zt_bool endpoint_ref_held = zt_false;
     //zt_u32 version          = 0;
     zt_s32 ret                 = 0;
 
@@ -891,6 +902,7 @@ static zt_s32 zt_usb_probe(struct usb_interface *pusb_intf,
         ret = -ENODEV;
         goto exit;
     }
+    endpoint_ref_held = zt_true;
 
     pctrl_buffer = zt_kzalloc(USB_CONTROL_MSG_BF_LEN);
     if (NULL == pctrl_buffer)
@@ -922,22 +934,28 @@ static zt_s32 zt_usb_probe(struct usb_interface *pusb_intf,
     if (hif_dev_insert(hif_node) < 0)
     {
         USB_WARN("[usb] hif dev insert error !!");
+        /* Keep the interface bound so disconnect can unwind partial HIF state. */
         ret = 0;
         goto exit;
     }
 
 exit :
-    if (pusb_mngt)
-    {
-        zt_kfree(pusb_mngt);
-    }
-
     if (ret < 0)
     {
         if (pctrl_buffer)
         {
             zt_kfree(pctrl_buffer);
         }
+        /* zt_endpoint_init() takes a USB-device reference on success. */
+        if (endpoint_ref_held)
+        {
+            usb_put_dev(pusb_mngt->pusb_dev);
+        }
+    }
+
+    if (pusb_mngt)
+    {
+        zt_kfree(pusb_mngt);
     }
 
     return ret;
@@ -950,26 +968,26 @@ static void zt_usb_disconnect(struct usb_interface *pusb_intf)
 
     LOG_D("************USB DISCONNECT*************");
 
+    if (!hif_node)
+    {
+        USB_WARN("[usb] disconnect called without a registered HIF node");
+        return;
+    }
+
     /* ndev unregister should been do first */
     ndev_unregister_all(hif_node->nic_info, hif_node->nic_number);
 
     hif_dev_removed(hif_node);
 
-    if (NULL != hif_node)
+    ret = hm_del_usb_id(hif_node->u.usb.usb_id);
+    if (ret)
     {
-        ret = hm_del_usb_id(hif_node->u.usb.usb_id);
-        if (ret)
-        {
-            USB_WARN("hm_del_usb_id [%d] failed", hif_node->u.usb.usb_id);
-        }
-        zt_kfree(hif_node->u.usb.ctrl_msg_buffer);
-        zt_endpoint_deinit(pusb_intf);
-        hif_node_unregister(hif_node);
+        USB_WARN("hm_del_usb_id [%d] failed", hif_node->u.usb.usb_id);
     }
-    else
-    {
-        USB_WARN("[usb] zt_usb_disconnect failed");
-    }
+
+    zt_kfree(hif_node->u.usb.ctrl_msg_buffer);
+    zt_endpoint_deinit(pusb_intf);
+    hif_node_unregister(hif_node);
 }
 
 static zt_s32 zt_usb_suspend(struct usb_interface *pusb_intf,
@@ -985,7 +1003,7 @@ static zt_s32 zt_usb_suspend(struct usb_interface *pusb_intf,
     if (!hif_node)
     {
         USB_ERROR("hif is null");
-        return -1;
+        return -ENODEV;
     }
 
     for (i = 0; i < hif_node->nic_number; i++)
@@ -1033,6 +1051,12 @@ static zt_s32 zt_usb_resume(struct usb_interface *pusb_intf)
 
     USB_DBG();
 
+    if (!hif_node)
+    {
+        USB_ERROR("hif is null during resume");
+        return -ENODEV;
+    }
+
     if (power_resume(hif_node))
     {
         USB_ERROR("power_resume false");
@@ -1045,6 +1069,12 @@ static zt_s32 zt_usb_resume(struct usb_interface *pusb_intf)
         if (pnic_info)
         {
             pwr_info_st *ppwr_info = pnic_info->pwr_info;
+
+            if (!ppwr_info)
+            {
+                USB_ERROR("nic%d power info is null during resume", i);
+                return -ENODEV;
+            }
 
             if (nic_resume(pnic_info))
             {
