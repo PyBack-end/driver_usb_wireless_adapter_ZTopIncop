@@ -996,7 +996,7 @@ static zt_s32 zt_usb_suspend(struct usb_interface *pusb_intf,
     if (!hif_node)
     {
         USB_ERROR("hif is null");
-        return -1;
+        return -ENODEV;
     }
 
     for (i = 0; i < hif_node->nic_number; i++)
@@ -1044,6 +1044,12 @@ static zt_s32 zt_usb_resume(struct usb_interface *pusb_intf)
 
     USB_DBG();
 
+    if (!hif_node)
+    {
+        USB_ERROR("hif is null during resume");
+        return -ENODEV;
+    }
+
     if (power_resume(hif_node))
     {
         USB_ERROR("power_resume false");
@@ -1056,6 +1062,12 @@ static zt_s32 zt_usb_resume(struct usb_interface *pusb_intf)
         if (pnic_info)
         {
             pwr_info_st *ppwr_info = pnic_info->pwr_info;
+
+            if (!ppwr_info)
+            {
+                USB_ERROR("nic%d power info is null during resume", i);
+                return -ENODEV;
+            }
 
             if (nic_resume(pnic_info))
             {

@@ -137,6 +137,7 @@ ccflags-y += -I$(src)/os -I$(src)/os/linux -I$(src)/os/linux/os_porting
 ccflags-y += -I$(src)/os/linux/hif -I$(src)/os/linux/netdev
 ccflags-y += -I$(src)/os/linux/cfg80211 -I$(src)/os/linux/iw -I$(src)/os/linux/pwr
 ccflags-y += -I$(src)/nic -I$(src)/nic/utility -I$(src)/nic/p2p
+ccflags-y += -DZT_DEBUG_LEVEL=$(CONFIG_DEBUG_LEVEL)
 
 ifeq ($(CONFIG_HIF_PORT), usb)
 $(MODULE_NAME)-y += os/linux/hif/usb.o
