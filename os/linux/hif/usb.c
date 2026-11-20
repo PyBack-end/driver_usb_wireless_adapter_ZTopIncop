@@ -75,7 +75,7 @@ static inline zt_s32 endpoint_num(const struct usb_endpoint_descriptor *epd)
     return usb_endpoint_num(epd);
 }
 
-zt_s32 zt_endpoint_init(struct usb_interface *pusb_intf,
+static zt_s32 zt_endpoint_init(struct usb_interface *pusb_intf,
                         hif_usb_mngt *pusb_mngt)
 {
     zt_s32 status                                      = 0;
@@ -171,7 +171,7 @@ zt_s32 zt_endpoint_init(struct usb_interface *pusb_intf,
     return status;
 }
 
-zt_s32 zt_endpoint_deinit(struct usb_interface *pusb_intf)
+static zt_s32 zt_endpoint_deinit(struct usb_interface *pusb_intf)
 {
     hif_node_st  *hif_node;
     hif_usb_mngt *pusb_mngt;
@@ -208,12 +208,12 @@ zt_s32 zt_endpoint_deinit(struct usb_interface *pusb_intf)
 }
 
 
-zt_s32 zt_usb_init(struct hif_node_  *hif_node)
+static zt_s32 zt_usb_init(struct hif_node_  *hif_node)
 {
     return 0;
 }
 
-zt_s32 zt_usb_deinit(struct hif_node_  *hif_node)
+static zt_s32 zt_usb_deinit(struct hif_node_  *hif_node)
 {
     USB_DBG("usb_deinit");
     return 0;
@@ -879,6 +879,7 @@ static zt_s32 zt_usb_probe(struct usb_interface *pusb_intf,
     hif_node_st  *hif_node  = NULL;
     zt_u8 *pctrl_buffer     = NULL;
     hif_usb_mngt *pusb_mngt = NULL;
+    zt_bool endpoint_ref_held = zt_false;
     //zt_u32 version          = 0;
     zt_s32 ret                 = 0;
 
@@ -901,6 +902,7 @@ static zt_s32 zt_usb_probe(struct usb_interface *pusb_intf,
         ret = -ENODEV;
         goto exit;
     }
+    endpoint_ref_held = zt_true;
 
     pctrl_buffer = zt_kzalloc(USB_CONTROL_MSG_BF_LEN);
     if (NULL == pctrl_buffer)
@@ -948,6 +950,11 @@ exit :
         if (pctrl_buffer)
         {
             zt_kfree(pctrl_buffer);
+        }
+        /* zt_endpoint_init() takes a USB-device reference on success. */
+        if (endpoint_ref_held)
+        {
+            usb_put_dev(pusb_mngt->pusb_dev);
         }
     }
 
