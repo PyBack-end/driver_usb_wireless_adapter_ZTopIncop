@@ -88,12 +88,23 @@ zt_s32 zt_endpoint_init(struct usb_interface *pusb_intf,
     struct usb_device *pusb_dev                     = NULL;
     zt_u8 i                                         = 0;
 
+    if (!pusb_intf || !pusb_mngt)
+    {
+        return -EINVAL;
+    }
+
     pusb_mngt->pusb_intf = pusb_intf;
     pusb_mngt->pusb_dev = interface_to_usbdev(pusb_intf);
 
     pusb_mngt->n_in_pipes = 0;
     pusb_mngt->n_out_pipes = 0;
     pusb_dev = pusb_mngt->pusb_dev;
+
+    if (!pusb_dev || !pusb_dev->actconfig || !pusb_intf->altsetting)
+    {
+        USB_ERROR("USB interface has no active configuration or alternate setting");
+        return -ENODEV;
+    }
 
     phost_cfg = pusb_dev->actconfig;
     pcfg_desc = &phost_cfg->desc;
@@ -162,8 +173,20 @@ zt_s32 zt_endpoint_init(struct usb_interface *pusb_intf,
 
 zt_s32 zt_endpoint_deinit(struct usb_interface *pusb_intf)
 {
-    hif_node_st  *hif_node = usb_get_intfdata(pusb_intf);
-    hif_usb_mngt *pusb_mngt = &hif_node->u.usb;
+    hif_node_st  *hif_node;
+    hif_usb_mngt *pusb_mngt;
+
+    if (!pusb_intf)
+    {
+        return -EINVAL;
+    }
+
+    hif_node = usb_get_intfdata(pusb_intf);
+    if (!hif_node)
+    {
+        return -ENODEV;
+    }
+    pusb_mngt = &hif_node->u.usb;
 
     usb_set_intfdata(pusb_intf, NULL);
     if (pusb_mngt)
@@ -922,6 +945,7 @@ static zt_s32 zt_usb_probe(struct usb_interface *pusb_intf,
     if (hif_dev_insert(hif_node) < 0)
     {
         USB_WARN("[usb] hif dev insert error !!");
+        /* Keep the interface bound so disconnect can unwind partial HIF state. */
         ret = 0;
         goto exit;
     }
@@ -950,12 +974,17 @@ static void zt_usb_disconnect(struct usb_interface *pusb_intf)
 
     LOG_D("************USB DISCONNECT*************");
 
+    if (!hif_node)
+    {
+        USB_WARN("[usb] disconnect called without a registered HIF node");
+        return;
+    }
+
     /* ndev unregister should been do first */
     ndev_unregister_all(hif_node->nic_info, hif_node->nic_number);
 
     hif_dev_removed(hif_node);
 
-    if (NULL != hif_node)
     {
         ret = hm_del_usb_id(hif_node->u.usb.usb_id);
         if (ret)

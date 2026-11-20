@@ -67,11 +67,9 @@ EXTRA_CFLAGS += -Wno-address-of-packed-member
 EXTRA_CFLAGS += -Wno-uninitialized
 EXTRA_CFLAGS += -Wno-type-limits
 EXTRA_CFLAGS += -Wno-empty-body
-EXTRA_CFLAGS += -w
 else
 EXTRA_CFLAGS += -Wno-all
 EXTRA_CFLAGS += -Wno-extra
-EXTRA_CFLAGS += -w
 endif
 
 ifeq ($(CONFIG_TX_SOFT_AGG), y)
@@ -133,6 +131,12 @@ EXTRA_LDFLAGS += --strip-debug
 ########################## Features ###########################
 
 ifneq ($(KERNELRELEASE),)
+
+# Kbuild's source path is stable even when the kernel build changes directory.
+ccflags-y += -I$(src)/os -I$(src)/os/linux -I$(src)/os/linux/os_porting
+ccflags-y += -I$(src)/os/linux/hif -I$(src)/os/linux/netdev
+ccflags-y += -I$(src)/os/linux/cfg80211 -I$(src)/os/linux/iw -I$(src)/os/linux/pwr
+ccflags-y += -I$(src)/nic -I$(src)/nic/utility -I$(src)/nic/p2p
 
 ifeq ($(CONFIG_HIF_PORT), usb)
 $(MODULE_NAME)-y += os/linux/hif/usb.o
