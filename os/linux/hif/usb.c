@@ -450,48 +450,35 @@ static inline void usb_read_port_complete(struct urb *purb)
         switch (purb->status)
         {
             case -EINVAL:
-            {
                 USB_WARN("[%s] EINVAL", __func__);
-            }
+                break;
             case -EPIPE:
-            {
-                USB_WARN("[%s] EPIPE", __func__);
-            }
+                USB_WARN("[%s] EPIPE (endpoint stalled)", __func__);
+                break;
             case -ENODEV:
-            {
-                USB_WARN("[%s] ENODEV", __func__);
-            }
             case -ESHUTDOWN:
-            {
-                USB_WARN("[%s] ESHUTDOWN", __func__);
-            }
-            case -ENOENT:
-            {
-                USB_WARN("[%s] ENOENT", __func__);
+                USB_WARN("[%s] device disconnected or shutting down", __func__);
                 hnode->dev_removed = zt_true;
                 break;
-            }
+            case -ENOENT:
+                /* A cancelled URB is not, by itself, proof of device removal. */
+                USB_WARN("[%s] ENOENT (URB cancelled)", __func__);
+                break;
             case -EPROTO:
-            {
                 USB_WARN("[%s] EPROTO", __func__);
-            }
+                break;
             case -EILSEQ:
-            {
                 USB_WARN("[%s] EILSEQ", __func__);
-            }
+                break;
             case -ETIME:
-            {
                 USB_WARN("[%s] ETIME", __func__);
-            }
+                break;
             case -ECOMM:
-            {
                 USB_WARN("[%s] ECOMM", __func__);
-            }
+                break;
             case -EOVERFLOW:
-            {
                 USB_WARN("[%s] EOVERFLOW", __func__);
                 break;
-            }
             case -EINPROGRESS:
             {
                 USB_WARN("ERROR: URB IS IN PROGRESS!");
@@ -985,20 +972,15 @@ static void zt_usb_disconnect(struct usb_interface *pusb_intf)
 
     hif_dev_removed(hif_node);
 
+    ret = hm_del_usb_id(hif_node->u.usb.usb_id);
+    if (ret)
     {
-        ret = hm_del_usb_id(hif_node->u.usb.usb_id);
-        if (ret)
-        {
-            USB_WARN("hm_del_usb_id [%d] failed", hif_node->u.usb.usb_id);
-        }
-        zt_kfree(hif_node->u.usb.ctrl_msg_buffer);
-        zt_endpoint_deinit(pusb_intf);
-        hif_node_unregister(hif_node);
+        USB_WARN("hm_del_usb_id [%d] failed", hif_node->u.usb.usb_id);
     }
-    else
-    {
-        USB_WARN("[usb] zt_usb_disconnect failed");
-    }
+
+    zt_kfree(hif_node->u.usb.ctrl_msg_buffer);
+    zt_endpoint_deinit(pusb_intf);
+    hif_node_unregister(hif_node);
 }
 
 static zt_s32 zt_usb_suspend(struct usb_interface *pusb_intf,
